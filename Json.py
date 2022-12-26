@@ -7,7 +7,7 @@ from dateutil import parser
 class Json(object):
     """
     WARNING: do NOT use data-classes, i.e. classes marked with the @dataclass attribute.
-    User plain classes with an initializer for fields/properties
+    Use plain classes with an initializer for fields/properties
     """    
 
     def Serialize(Instance):
