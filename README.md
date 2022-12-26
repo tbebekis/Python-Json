@@ -20,7 +20,7 @@ There are many answers that can be found by searching the internet on "*how to d
 
 Regarding the `default` parameter the documentation states: "*If specified, default should be a function that gets called for objects that can’t otherwise be serialized. It should return a JSON encodable version of the object or raise a TypeError. If not specified, TypeError is raised.*"
 
-The proposed solution is fine as long the object being serialized, and any of its inner objects, provide an internal `__dict__`. 
+The proposed solution is fine as long as the object being serialized, and any of its inner objects, provide an internal `__dict__`. 
 
 The `date` and `datetime` are types without a `__dict__`. Furthermore the `dumps()` function does **not** handle those two types the way it handles other primitives such as strings and integers.
 
@@ -57,7 +57,9 @@ print(type(Result)) # prints <class 'dict'>
 
 In most of the cases the requirements in an application is to convert Json text to an instance of a custom class, say `Customer` or `Invoice` or something like that. Not to a Dictionary.
 
-Another serious issue is, again, the `date` and `datetime` values. These, according to Json specification, are serialized to strings.
+Another serious issue is, again, the `date` and `datetime` values. These, according to Json specification, are serialized to strings. 
+
+Which is ok as long as they deserialized back to `date` and `datetime` values. But that does not happen automatically.
 
 When it comes to deserialization, there is no way to know if the value being deserialized should be converted to `date` or `datetime` value. The only thing that maybe is useful is to examine the format of the string value.
 
@@ -214,4 +216,130 @@ JsonText = Json.Serialize(Obj)
 print(JsonText)
 ```
 
+The following is the output of the above.
+
+```
+1. ======== Serialize 
+{
+    "String": "Python",
+    "Integer": 1234,
+    "Decimal": 123.45,
+    "Boolean": true,
+    "DateTime": "2022-12-26T14:11:11.580494",
+    "Inner": {
+        "List": [
+            "One",
+            2,
+            "Three"
+        ],
+        "Dic": {
+            "key": "value",
+            "key2": false,
+            "key3": 456.78
+        }
+    }
+}
+2. ======== Modify the object and Serialize again
+{
+    "String": "Python is cool",
+    "Integer": 734,
+    "Decimal": 2469.0,
+    "Boolean": false,
+    "DateTime": "2023-01-09T14:11:11.580494",
+    "Inner": {
+        "List": [
+            "One",
+            2,
+            "Three"
+        ],
+        "Dic": {
+            "key": "value",
+            "key2": false,
+            "key3": 456.78
+        }
+    }
+}
+3. ======== Deserialize using the first JSON text (populate properties of an existing object)
+{
+    "String": "Python",
+    "Integer": 1234,
+    "Decimal": 123.45,
+    "Boolean": true,
+    "DateTime": "2022-12-26T14:11:11.580494",
+    "Inner": {
+        "List": [
+            "One",
+            2,
+            "Three"
+        ],
+        "Dic": {
+            "key": "value",
+            "key2": false,
+            "key3": 456.78
+        }
+    }
+}
+4. ======== Deserialize using the first JSON text (create new object using a class)
+{
+    "String": "Python",
+    "Integer": 1234,
+    "Decimal": 123.45,
+    "Boolean": true,
+    "DateTime": "2022-12-26T14:11:11.580494",
+    "Inner": {
+        "List": [
+            "One",
+            2,
+            "Three"
+        ],
+        "Dic": {
+            "key": "value",
+            "key2": false,
+            "key3": 456.78
+        }
+    }
+}
+```
+
 ## Discussion
+
+The `Json` class passes a custom [JSONEncoder](https://docs.python.org/3/library/json.html#json.JSONEncoder) when calling the `dumps()` function and a custom [JSONDecoder](https://docs.python.org/3/library/json.html#json.JSONDecoder) when calling the `loads()` function, in the `cls` parameter. 
+
+### Custom Serialization
+
+The custom `JsonEncoder` inherits from the built-in `json.JSONEncoder` and overrides the `default()` method.
+
+About the `default()` method the documentation states: "*Implement this method in a subclass such that it returns a serializable object for o, or calls the base implementation (to raise a TypeError).*".
+
+The `default()` method of the custom `JsonEncoder` returns the internal `__dict__` of the object being serialized, when that object has such an attribute.
+
+When the object being serialized is an instance of the `date` or `datetime` types, it returns a string representation of the value.
+
+Otherwise calls the base implementation.
+
+
+### Custom Deserialization
+
+The custom `JsonDecoder` inherits from the built-in `json.JSONDecoder` and assings the `parse_string` attribute of the base class with a custom `Parse()` function.
+
+When the passed-in string looks like a Date or DateTime value, ISO or not, the custom `Parse()` function  converts the string into a `date` or `datetime` and returns that value. Else returns the string as it was.
+
+The glitchy point in the above is that the `JsonDecoder` always assume that if the passed-in string looks like a Date or DateTime, then it actually **is** a `date` or `datetime`. Which is not always true.
+
+Furthermore the `Json.Deserialize()` method does a few more things. Its signature is as following:
+
+``` def Deserialize(JsonText: str, ClassOrInstance = None)```
+
+The caller may pass a class or an instance of a class as the argument in the second parameter. 
+
+Passing such an argument is an indication that the caller wishes to use the passed-in Json string to either construct a new instance of the specified class or populate the properties of the specified instance.
+
+When that second parameter is `None` then the `Deserialize()` returns the Python `dict` as it is returned by the `loads()`.
+
+The `Deserialize()` method deserializes **complex objects** too, i.e. objects containing other objects as nested.
+
+ Complex object deserializations assumes that 
+ - the specified class provides a default constructor, i.e. without parameters other than the self
+ - any nested object instance is not null (None) after the constructor call.
+
+
