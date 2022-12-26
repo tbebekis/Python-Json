@@ -1,6 +1,6 @@
 # Python Json: Serialize/Deserialize objects and complex objects
 
-Source code can be fount at [Github](https://github.com/tbebekis/Python-Json).
+Source code can be found at [Github](https://github.com/tbebekis/Python-Json).
 
 ## Introduction
 [Json](https://en.wikipedia.org/wiki/JSON) is a language independent way to represent objects as text and reconstruct objects from text. 
